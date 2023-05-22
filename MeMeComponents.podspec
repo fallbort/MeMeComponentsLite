@@ -50,6 +50,7 @@ Pod::Spec.new do |spec|
       base.dependency 'ObjectMapper'
       base.dependency 'Result'
       base.dependency 'RxSwift'
+      base.dependency 'Moya'
       base.framework   = "Foundation"
   end
 end

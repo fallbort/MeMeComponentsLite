@@ -177,7 +177,7 @@ public class MeMeSingleFileDonwloader {
         return resCacheDir.appendingPathComponent(fileName)
     }
     
-    public func downloadResumeFileUrl(_ object: MeMeSingleDownloadProtocol) -> URL {
+    func downloadResumeFileUrl(_ object: MeMeSingleDownloadProtocol) -> URL {
         if let url = object.localResumeUrl {
             return url
         }else{
@@ -567,7 +567,7 @@ public class MeMeSingleFileDonwloader {
         return ret
     }
     
-    public func updateProgress(object:MeMeSingleDownloadProtocol,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool) {
+    func updateProgress(object:MeMeSingleDownloadProtocol,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool) {
         otherLock.lock()
         var progress = downloadProgress[object.key] ?? MeMeSingleProgress()
         progress.key = object.key
@@ -585,7 +585,7 @@ public class MeMeSingleFileDonwloader {
         didDownLoadedBlock?(object,totalSize != nil ? true : false,isDone)
     }
     
-    public func clearProgress(object:MeMeSingleDownloadProtocol) {
+    func clearProgress(object:MeMeSingleDownloadProtocol) {
         var progress = MeMeSingleProgress()
         progress.key = object.key
         otherLock.lock()
