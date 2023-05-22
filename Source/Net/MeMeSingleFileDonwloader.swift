@@ -19,6 +19,13 @@ public enum SingleDownloadStage : String {
     case failed //下载失败
 }
 
+public protocol MeMeSinglePluginProtocol {
+    func checkPluginFinished(object:MeMeSingleDownloadProtocol) -> Bool  //是否处理完成
+    func afterDeal(object:MeMeSingleDownloadProtocol,complete:(()->()))  //进行处理
+    func cancel()  //取消处理
+    func getPercent() -> Double //处理进度
+}
+
 public protocol MeMeSingleDownloadProtocol {
     var fileName:String {get}
     var sourceUrl:String {get}
@@ -26,6 +33,7 @@ public protocol MeMeSingleDownloadProtocol {
     var alwaysRetry:Bool {get}
     var md5Check:String? {get}
     var sourceUrlConverCDN:String {get}
+    var plugins:[MeMeSinglePluginProtocol] {get}
     func extraCheckLocalValid(url:URL) -> Bool
     
     var localUrl:URL? {get set}
@@ -45,6 +53,7 @@ public struct MeMeSingleDownloadObject:MeMeSingleDownloadProtocol {
     public var alwaysRetry:Bool = false
     public var md5Check:String?
 
+    public var plugins:[MeMeSinglePluginProtocol] = []
     
     public func extraCheckLocalValid(url:URL) -> Bool {
         return true
@@ -139,6 +148,20 @@ public class MeMeSingleFileDonwloader {
         })
     }
     
+    public func allFinished(object: MeMeSingleDownloadProtocol) -> Bool {
+        if fileDownloaded(object: object) == true {
+            var hasUnfinished = false
+            for plugin in object.plugins {
+                let finished = plugin.checkPluginFinished(object: object)
+                if finished == false {
+                    hasUnfinished = true
+                    break
+                }
+            }
+            return !hasUnfinished
+        }
+        return false
+    }
     //判断是否下载完成
     public func fileDownloaded(object: MeMeSingleDownloadProtocol) -> Bool {
         let localFileURL = downloadFileUrl(object)
@@ -188,7 +211,7 @@ public class MeMeSingleFileDonwloader {
     public func addOneDownload(object: MeMeSingleDownloadProtocol) {
         lock.lock()
         var hasInContain = false
-        if willDownloadGiftQueue.contains(where: { $0.key == object.key }) || downloadRequest.contains(where: { $0.key == object.key }) {
+        if willDownloadGiftQueue.contains(where: { $0.key == object.key }) || downloadingGiftQueue.contains(where: { $0.key == object.key }) {
             hasInContain = true
         }
         if hasInContain == false {
@@ -222,6 +245,11 @@ public class MeMeSingleFileDonwloader {
         } {
             failDownloadGiftQueue.remove(at: index)
         }
+        if let index = downloadingGiftQueue.firstIndex { (oneObject) -> Bool in
+            return oneObject.key == object.key
+        } {
+            downloadingGiftQueue.remove(at: index)
+        }
         downloadRetry.removeValue(forKey: object.key)
         let request = downloadRequest.removeValue(forKey: object.key)
         downloadObjects.removeValue(forKey: object.key)
@@ -230,6 +258,8 @@ public class MeMeSingleFileDonwloader {
         }else{
             request?.cancel()
         }
+        let plugin = downloadPlugins.removeValue(forKey: object.key)
+        plugin?.cancel()
         lock.unlock()
         
         if del == true {
@@ -264,15 +294,14 @@ public class MeMeSingleFileDonwloader {
         var object: MeMeSingleDownloadProtocol?
         lock.lock()
         let willCount = willDownloadGiftQueue.count
-        if  willCount > 0,downloadRequest.count < Self.maxDownloadCount {
-            object = willDownloadGiftQueue.removeFirst()
+        if  willCount > 0,downloadingGiftQueue.count < Self.maxDownloadCount {
+            object = willDownloadGiftQueue.first
         }
         lock.unlock()
         if let object = object {
             downloadQueue.async { [weak self] in
-                if self?.fileDownloaded(object:object) == false {
-                    self?.download(object: object)
-                    self?.startNextDownload()
+                if self?.allFinished(object:object) == false {
+                    self?.firstDownload()
                 }else{
                     self?.startNextDownload()
                 }
@@ -284,7 +313,7 @@ public class MeMeSingleFileDonwloader {
             lock.unlock()
             if count > 0 {
                 DispatchQueue.main.async { [weak self] in
-                    _ = delay(5) { [weak self] in
+                    _ = delay(3) { [weak self] in
                         guard let strongSelf = self else { return}
                         strongSelf.lock.lock()
                         let count = self?.failDownloadGiftQueue.count
@@ -304,19 +333,48 @@ public class MeMeSingleFileDonwloader {
         }
     }
     
-    fileprivate func download(object: MeMeSingleDownloadProtocol, isRetry: Bool = false) {
-        
-        if !isRetry {
+    fileprivate func firstDownload() {
+        self.download(object: nil)
+    }
+    
+    fileprivate func retryDownload(object: MeMeSingleDownloadProtocol) {
+        self.download(object: object)
+    }
+    
+    fileprivate func download(object: MeMeSingleDownloadProtocol?) {
+        var object: MeMeSingleDownloadProtocol? = object
+        if object == nil { //非重试内部获取object
             lock.lock()
+            let willCount = willDownloadGiftQueue.count
+            if  willCount > 0,downloadingGiftQueue.count < Self.maxDownloadCount {
+                let newObject = willDownloadGiftQueue.removeFirst()
+                object = newObject
+            }
             var hasRequest = false
-            // 如果并非是重试，那么发现队列中有当前礼物，那么不能继续执行了，等待执行完毕了再说
-            if nil != downloadRequest[object.key] {
-                hasRequest = true
+            if let object = object {
+                // 如果并非是重试，那么发现队列中有当前礼物，那么不能继续执行了，等待执行完毕了再说
+                if let index = downloadingGiftQueue.firstIndex { (oneObject) -> Bool in
+                    return oneObject.key == object.key
+                } {
+                    hasRequest = true
+                }
+            }
+            var skipToNext = false
+            if let object = object,hasRequest == false {
+                downloadingGiftQueue.append(object)
+            }else{
+                skipToNext = true
             }
             lock.unlock()
-            if hasRequest == true {
+            if skipToNext == true {
+                self.startNextDownload()
                 return
             }
+        }
+        
+        guard let object = object else {
+            self.startNextDownload()
+            return
         }
         
         let request = dowloadFile(object: object) { [weak self] success in
@@ -381,9 +439,30 @@ public class MeMeSingleFileDonwloader {
                             self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
                         }
                     }
-                    self?.startNextDownload()
+                    if success == true {
+                        strongSelf.dealPlugins(object: object, complete: { [weak self] success in
+                            guard let strongSelf = self else { return}
+                            strongSelf.lock.lock()
+                            if let index = strongSelf.downloadingGiftQueue.firstIndex { (oneObject) -> Bool in
+                                return oneObject.key == object.key
+                            } {
+                                strongSelf.downloadingGiftQueue.remove(at: index)
+                            }
+                            strongSelf.lock.unlock()
+                            strongSelf.startNextDownload()
+                        })
+                    }else{
+                        strongSelf.lock.lock()
+                        if let index = strongSelf.downloadingGiftQueue.firstIndex { (oneObject) -> Bool in
+                            return oneObject.key == object.key
+                        } {
+                            strongSelf.downloadingGiftQueue.remove(at: index)
+                        }
+                        strongSelf.lock.unlock()
+                        strongSelf.startNextDownload()
+                    }
                 }else{
-                    self?.download(object: object, isRetry: true)
+                    self?.retryDownload(object: object)
                 }
             }
         }
@@ -515,7 +594,12 @@ public class MeMeSingleFileDonwloader {
                 }
                 request?.task?.priority = URLSessionTask.lowPriority
             }else{
-                completion?(false)
+                downloadQueue.async { [weak self] in
+                    DispatchQueue.main.async {[weak self] in
+                        self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
+                    }
+                    completion?(false)
+                }
             }
             
         } else {
@@ -528,6 +612,10 @@ public class MeMeSingleFileDonwloader {
         }
         
         return request
+    }
+    
+    fileprivate func dealPlugins(object: MeMeSingleDownloadProtocol,complete:((_ success:Bool)->())?) {
+        complete?(true)
     }
 
     func checkFileValid(localURL:URL,md5:String?) -> Bool {
@@ -593,7 +681,7 @@ public class MeMeSingleFileDonwloader {
         otherLock.unlock()
     }
     
-    public func getProgress(object:MeMeSingleDownloadProtocol) -> (percent:Double?,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool,inDownlaod:Bool) {
+    public func getProgress(object:MeMeSingleDownloadProtocol) -> (percent:Double?,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool,inAllStage:Bool,inDownlaod:Bool,inPlugin:Bool) {
         let isDownloaded = fileDownloaded(object: object)
         otherLock.lock()
         let progress = downloadProgress[object.key]
@@ -620,8 +708,29 @@ public class MeMeSingleFileDonwloader {
         if inDownlaod == false {
             inDownlaod = downloadRequest[object.key] != nil
         }
+        var inPlugin = false
+        if inPlugin == false {
+            inPlugin = downloadPlugins[object.key] != nil
+        }
+        var inAllStage = false
+        if inAllStage == false {
+            inAllStage = downloadingGiftQueue.contains { (one) -> Bool in
+                return one.key == object.key
+            }
+        }
+        let plugins:[MeMeSinglePluginProtocol] = downloadObjects[object.key]?.plugins ?? []
         lock.unlock()
-        return (percent,progress?.curSize,progress?.totalSize,downloaded ?? false,progress?.isRunning ?? false,inDownlaod)
+        if plugins.count > 0, percent != nil {
+            var pluginPercent:Double = 0.0
+            for plugin in plugins {
+                pluginPercent += plugin.getPercent()
+            }
+            let oldPercent:Double = (percent ?? 0.0) / 2.0
+            let oldPluginPercent = (pluginPercent / Double(plugins.count)) / 2.0
+            percent = oldPercent + oldPluginPercent
+        }
+        
+        return (percent,progress?.curSize,progress?.totalSize,downloaded ?? false,progress?.isRunning ?? false,inAllStage,inDownlaod,inPlugin)
     }
     
     
@@ -635,6 +744,7 @@ public class MeMeSingleFileDonwloader {
     
   
     var willDownloadGiftQueue: [MeMeSingleDownloadProtocol] = []
+    var downloadingGiftQueue: [MeMeSingleDownloadProtocol] = []
     var failDownloadGiftQueue: [MeMeSingleDownloadProtocol] = []
     // 暂存变量
     static let progressMin = 0
@@ -643,6 +753,7 @@ public class MeMeSingleFileDonwloader {
     static let maxDownloadCount = 4
     var downloadRetry = [String: Int]()   // 记录重试的次数
     var downloadRequest = [String: DownloadRequest]()
+    var downloadPlugins = [String: MeMeSinglePluginProtocol]()
     var downloadObjects:[String:MeMeSingleDownloadProtocol] = [:]  //key的对象
     fileprivate let lock:NSLock = NSLock()
     
@@ -650,10 +761,27 @@ public class MeMeSingleFileDonwloader {
     private var downloadedCache:[String:Bool] = [:]   //文件是否已下载完成的缓存,key为localPath
     fileprivate let otherLock:NSLock = NSLock()  //用于reachablityManager等
     
+    public var downloadAllCount: Int {
+        var count = 0
+        lock.lock()
+        count += downloadRequest.count
+        count += downloadPlugins.count
+        lock.unlock()
+        return count
+    }
+    
     public var downloadRequestCount: Int {
         var count = 0
         lock.lock()
         count = downloadRequest.count
+        lock.unlock()
+        return count
+    }
+    
+    public var downloadPluginCount: Int {
+        var count = 0
+        lock.lock()
+        count = downloadPlugins.count
         lock.unlock()
         return count
     }
