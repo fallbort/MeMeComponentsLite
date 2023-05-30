@@ -358,15 +358,15 @@ public class MeMeSingleFileDonwloader {
             var key = newObject.key
             newObject.plugins.forEach { [weak self] plugin in
                 plugin.downloader = self
-                plugin.progressChangedBlock = { [weak self] percent,done in
-                    DispatchQueue.main.async { [weak self] in
+                plugin.progressChangedBlock = { [weak self,weak plugin] percent,done in
+                    DispatchQueue.main.async { [weak self,weak plugin] in
                         guard let `self` = self else {return}
                         self.lock.lock()
                         let inObject = self.downloadObjects[key]
                         self.lock.unlock()
                         
-                        if let inObject = inObject {
-                            self.updatePluginsProgress(object: inObject, isDone: done)
+                        if let inObject = inObject,let plugin = plugin {
+                            self.updatePluginsProgress(object: inObject,plugin: plugin, isDone: done)
                         }
                     }
                 }
@@ -379,8 +379,12 @@ public class MeMeSingleFileDonwloader {
             var newObject = object
             newObject.localUrl = downloadFileUrl(object)
             newObject.localResumeUrl = downloadResumeFileUrl(object)
+            var hasDone = false
+            if self.allFinished(object: newObject) == true {
+                hasDone = true
+            }
 
-            didDownLoadedBlock?(newObject,false,false,true)
+            didDownLoadedBlock?(newObject,false,hasDone,(hasDone == true ? false : true))
             startNextDownload()
         }
     }
@@ -907,7 +911,7 @@ public class MeMeSingleFileDonwloader {
         downloadProgress[object.key] = progress
         otherLock.unlock()
 
-        didDownLoadedBlock?(object,totalSize != nil ? true : false,isDone,true)
+        didDownLoadedBlock?(object,totalSize != nil ? true : false,(object.plugins.count > 0 ? false : isDone),true)
     }
     
     fileprivate func clearProgress(object:MeMeSingleDownloadProtocol) {
@@ -918,8 +922,14 @@ public class MeMeSingleFileDonwloader {
         otherLock.unlock()
     }
     
-    fileprivate func updatePluginsProgress(object:MeMeSingleDownloadProtocol,isDone:Bool) {
-        didDownLoadedBlock?(object,true,isDone,true)
+    fileprivate func updatePluginsProgress(object:MeMeSingleDownloadProtocol,plugin:MeMeSinglePluginProtocol,isDone:Bool) {
+        var isDone = isDone
+        if let last = object.plugins.last,NSObject.getAddress(last) == NSObject.getAddress(plugin) {
+            
+        }else{
+            isDone = false
+        }
+        didDownLoadedBlock?(object,true,isDone,false)
     }
     
     public func getProgress(object:MeMeSingleDownloadProtocol) -> (percent:Double?,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool,inAllStage:Bool,inDownlaod:Bool,inPlugin:Bool) {
