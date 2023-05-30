@@ -67,7 +67,7 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
                 var showProgress = self.progress
                 self.lock.unlock()
                 if var progress = progress {
-                    progress = progress > 0.95 ? 0.95 : progress
+                    progress = progress > 0.99 ? 0.99 : progress
                     self.lock.lock()
                     self.progress = progress
                     showProgress = progress

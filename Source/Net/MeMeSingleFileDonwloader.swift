@@ -111,8 +111,14 @@ public struct MeMeSingleDownloadObject:MeMeSingleDownloadProtocol {
         return true
     }
     
+    fileprivate var _key:String?
     public var key:String {
-        return fileName
+        get {
+            return _key ?? fileName
+        }
+        set {
+            _key = newValue
+        }
     }
     public var sourceUrlConverCDN:String = ""
     
