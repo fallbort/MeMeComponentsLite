@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SSZipArchive
 import MeMeKit
 
 public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
