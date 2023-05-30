@@ -73,7 +73,7 @@ extension MeMeSinglePluginProtocol {
             return value ?? 1.0
         }
         set {
-            objc_setAssociatedObject(self, &MeMeSinglePluginProgressAccess, newValue, .OBJC_ASSOCIATION_ASSIGN)
+            objc_setAssociatedObject(self, &MeMeSinglePluginProgressAccess, newValue, .OBJC_ASSOCIATION_RETAIN)
         }
     }
 }
