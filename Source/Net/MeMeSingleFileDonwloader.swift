@@ -33,8 +33,9 @@ extension MeMeSinglePluginProtocol {
     public func cancel(object:MeMeSingleDownloadProtocol) {}
 }
 
-private var MeMeSinglePluginDownloader = "MeMeSinglePluginDownloader"
-private var MeMeSinglePluginProgress = "MeMeSinglePluginProgress"
+private var MeMeSinglePluginDownloader = "PluginDownloader"
+private var MeMeSinglePluginProgress = "PluginProgress"
+private var MeMeSinglePluginProgressAccess = "PluginProgressAccess"
 
 extension MeMeSinglePluginProtocol {
     weak var downloader: MeMeSingleFileDonwloader? {
@@ -56,13 +57,23 @@ extension MeMeSinglePluginProtocol {
         }
     }
     
-    var progressChangedBlock: ((_ percent:CGFloat,_ done:Bool)->())? {
+    var progressChangedBlock: ((_ percent:CGFloat,_ success:Bool?)->())? {
         get {
-            let block = objc_getAssociatedObject(self, &MeMeSinglePluginProgress) as? ((_ percent:CGFloat,_ done:Bool)->())
+            let block = objc_getAssociatedObject(self, &MeMeSinglePluginProgress) as? ((_ percent:CGFloat,_ success:Bool?)->())
             return block
         }
         set {
             objc_setAssociatedObject(self, &MeMeSinglePluginProgress, newValue, .OBJC_ASSOCIATION_COPY)
+        }
+    }
+    
+    var percentAccess:Double {//进度条百分比权重，默认1.0
+        get {
+            let value = objc_getAssociatedObject(self, &MeMeSinglePluginProgressAccess) as? Double
+            return value ?? 1.0
+        }
+        set {
+            objc_setAssociatedObject(self, &MeMeSinglePluginProgressAccess, newValue, .OBJC_ASSOCIATION_ASSIGN)
         }
     }
 }
@@ -194,7 +205,7 @@ public struct MeMeSingleProgress {
     public var curSize:Int64?   //当前下载量
     public var totalSize:Int64?  //总大小
     public var isRunning:Bool = false  //是否在下载中
-    public var isDone:Bool = false  //是否已完成
+    public var isSuccess:Bool?  //是否已成功下载
 }
 
 
@@ -202,7 +213,7 @@ public class MeMeSingleFileDonwloader {
     //MARK:<>外部变量
     
     //MARK:<>外部block
-    public var didDownLoadedBlock:((_ object:MeMeSingleDownloadProtocol,_ justPercent:Bool,_ done:Bool,_ isDownload:Bool)->())?
+    public var didDownLoadedBlock:((_ object:MeMeSingleDownloadProtocol,_ justPercent:Bool,_ success:Bool?,_ isDownload:Bool)->())?
     public var didStageChangedInThreadBlock:((_ stage:SingleDownloadStage)->())?
     
     //MARK:<>生命周期开始
@@ -358,7 +369,7 @@ public class MeMeSingleFileDonwloader {
             var key = newObject.key
             newObject.plugins.forEach { [weak self] plugin in
                 plugin.downloader = self
-                plugin.progressChangedBlock = { [weak self,weak plugin] percent,done in
+                plugin.progressChangedBlock = { [weak self,weak plugin] percent,success in
                     DispatchQueue.main.async { [weak self,weak plugin] in
                         guard let `self` = self else {return}
                         self.lock.lock()
@@ -366,7 +377,7 @@ public class MeMeSingleFileDonwloader {
                         self.lock.unlock()
                         
                         if let inObject = inObject,let plugin = plugin {
-                            self.updatePluginsProgress(object: inObject,plugin: plugin, isDone: done)
+                            self.updatePluginsProgress(object: inObject,plugin: plugin, success: success)
                         }
                     }
                 }
@@ -434,7 +445,7 @@ public class MeMeSingleFileDonwloader {
             otherLock.unlock()
             clearProgress(object: object)
         }
-        didDownLoadedBlock?(object,false,false,true)
+        didDownLoadedBlock?(object,false,nil,false)
         if request != nil {
             startNextDownload()
         }
@@ -552,8 +563,10 @@ public class MeMeSingleFileDonwloader {
             if self?.showLog == true {
                 gLog("test dowloadFile out")
             }
+            let oldSuccess = success
             guard let strongSelf = self else { return}
-            if let success = self?.fileDownloaded(object: object) {
+            if var success = self?.fileDownloaded(object: object)  {
+                success = success == true ? oldSuccess : success
                 var needRetry = false
                 if success == false
                 {
@@ -613,7 +626,11 @@ public class MeMeSingleFileDonwloader {
                     strongSelf.lock.unlock()
                     if hasInFailed != true && success == false {
                         DispatchQueue.main.async {[weak self] in
-                            self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
+                            self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: false, isRunning: false)
+                        }
+                    }else if success == true {
+                        DispatchQueue.main.async {[weak self] in
+                            self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: true, isRunning: false)
                         }
                     }
                     if self?.showLog == true {
@@ -688,12 +705,12 @@ public class MeMeSingleFileDonwloader {
             let cacheURL = downloadResumeFileUrl(object)
             if FileManager.default.fileExists(atPath: cacheURL.path),let data = FileManager.default.contents(atPath: cacheURL.path) {
                 DispatchQueue.main.async {[weak self] in
-                    self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: true)
+                    self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: nil, isRunning: true)
                 }
                 request = AF.download(resumingWith:data, to: destination)
             }else{
                 DispatchQueue.main.async {[weak self] in
-                    self?.updateProgress(object: object, curSize: 0, totalSize: nil, isDone: false, isRunning: true)
+                    self?.updateProgress(object: object, curSize: 0, totalSize: nil, isSuccess: nil, isRunning: true)
                 }
                 request = AF.download(object.sourceUrlConverCDN, to: destination)
             }
@@ -704,7 +721,7 @@ public class MeMeSingleFileDonwloader {
                     let curSize = progress.completedUnitCount
                     let totalSize = progress.totalUnitCount
                     DispatchQueue.main.async {[weak self] in
-                        self?.updateProgress(object: object, curSize: curSize, totalSize: totalSize, isDone: false, isRunning: true)
+                        self?.updateProgress(object: object, curSize: curSize, totalSize: totalSize, isSuccess: nil, isRunning: true)
                     }
                 }).responseData { [weak self] response in
                     guard let `self` = self else {return}
@@ -739,11 +756,11 @@ public class MeMeSingleFileDonwloader {
                         self.otherLock.unlock()
                         if success == true {
                             DispatchQueue.main.async {[weak self] in
-                                self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: true, isRunning: false)
+                                self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: nil, isRunning: false)
                             }
                         }else{
                             DispatchQueue.main.async {[weak self] in
-                                self?.updateProgress(object: object, curSize: 0, totalSize: nil, isDone: false, isRunning: false)
+                                self?.updateProgress(object: object, curSize: 0, totalSize: nil, isSuccess: nil, isRunning: false)
                             }
                         }
                         
@@ -769,7 +786,7 @@ public class MeMeSingleFileDonwloader {
 //                                }
 //                            }
                             DispatchQueue.main.async {[weak self] in
-                                self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
+                                self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: nil, isRunning: false)
                             }
                         }else{
                             if FileManager.default.fileExists(atPath: cacheURL.path) {
@@ -780,7 +797,7 @@ public class MeMeSingleFileDonwloader {
                                 }
                             }
                             DispatchQueue.main.async {[weak self] in
-                                self?.updateProgress(object: object, curSize: 0, totalSize: nil, isDone: false, isRunning: false)
+                                self?.updateProgress(object: object, curSize: 0, totalSize: nil, isSuccess: nil, isRunning: false)
                             }
                         }
                         success = false
@@ -802,7 +819,7 @@ public class MeMeSingleFileDonwloader {
             }else{
                 downloadQueue.async { [weak self] in
                     DispatchQueue.main.async {[weak self] in
-                        self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
+                        self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: nil, isRunning: false)
                     }
                     if self?.showLog == true {
                         gLog("test download completion")
@@ -814,7 +831,7 @@ public class MeMeSingleFileDonwloader {
         } else {
             downloadQueue.async { [weak self] in
                 DispatchQueue.main.async {[weak self] in
-                    self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: true, isRunning: false)
+                    self?.updateProgress(object: object, curSize: nil, totalSize: nil, isSuccess: nil, isRunning: false)
                 }
                 if self?.showLog == true {
                     gLog("test download completion")
@@ -900,18 +917,18 @@ public class MeMeSingleFileDonwloader {
         return ret
     }
     
-    fileprivate func updateProgress(object:MeMeSingleDownloadProtocol,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool) {
+    fileprivate func updateProgress(object:MeMeSingleDownloadProtocol,curSize:Int64?,totalSize:Int64?,isSuccess:Bool?,isRunning:Bool) {
         otherLock.lock()
         var progress = downloadProgress[object.key] ?? MeMeSingleProgress()
         progress.key = object.key
         progress.curSize = curSize == nil ? progress.curSize : curSize
         progress.totalSize = totalSize == nil ? progress.totalSize : totalSize
-        progress.isDone = isDone
+        progress.isSuccess = isSuccess
         progress.isRunning = isRunning
         downloadProgress[object.key] = progress
         otherLock.unlock()
 
-        didDownLoadedBlock?(object,totalSize != nil ? true : false,(object.plugins.count > 0 ? false : isDone),true)
+        didDownLoadedBlock?(object,totalSize != nil ? true : false,(object.plugins.count > 0 ? nil : isSuccess),true)
     }
     
     fileprivate func clearProgress(object:MeMeSingleDownloadProtocol) {
@@ -922,14 +939,14 @@ public class MeMeSingleFileDonwloader {
         otherLock.unlock()
     }
     
-    fileprivate func updatePluginsProgress(object:MeMeSingleDownloadProtocol,plugin:MeMeSinglePluginProtocol,isDone:Bool) {
-        var isDone = isDone
+    fileprivate func updatePluginsProgress(object:MeMeSingleDownloadProtocol,plugin:MeMeSinglePluginProtocol,success:Bool?) {
+        var success = success
         if let last = object.plugins.last,NSObject.getAddress(last) == NSObject.getAddress(plugin) {
             
-        }else{
-            isDone = false
+        }else if success == true {
+            success = nil
         }
-        didDownLoadedBlock?(object,true,isDone,false)
+        didDownLoadedBlock?(object,true,success,false)
     }
     
     public func getProgress(object:MeMeSingleDownloadProtocol) -> (percent:Double?,curSize:Int64?,totalSize:Int64?,isDone:Bool,isRunning:Bool,inAllStage:Bool,inDownlaod:Bool,inPlugin:Bool) {
@@ -937,13 +954,13 @@ public class MeMeSingleFileDonwloader {
         var inAllStage = false
         var inDownlaod = false
         var inPlugin = false
-        var downloaded:Bool?
+        var isDone:Bool = false
         var progress:MeMeSingleProgress?
         if self.allFinished(object: object) == false {
             let isDownloaded = fileDownloaded(object: object)
             otherLock.lock()
             progress = downloadProgress[object.key]
-            downloaded = isDownloaded == true ? isDownloaded : progress?.isDone
+            var downloaded = isDownloaded == true ? isDownloaded : progress?.isSuccess
             
             if downloaded == true {
                 percent = 1.0
@@ -980,19 +997,26 @@ public class MeMeSingleFileDonwloader {
             lock.unlock()
             if plugins.count > 0, percent != nil {
                 var pluginPercent:Double = 0.0
+                var pluginTotal:Double = 0.0
                 for plugin in plugins {
-                    pluginPercent += plugin.getPercent(object: object)
+                    pluginTotal += plugin.percentAccess
                 }
-                let oldPercent:Double = (percent ?? 0.0) / 2.0
-                let oldPluginPercent = (pluginPercent / Double(plugins.count)) / 2.0
-                percent = oldPercent + oldPluginPercent
+                var downloadTotal:Double = Double(plugins.count)
+                
+                for plugin in plugins {
+                    let oneTotal:Double = (plugin.percentAccess / (downloadTotal + pluginTotal))
+                    pluginPercent += plugin.getPercent(object: object) * oneTotal
+                }
+                
+                let oldPercent:Double = (percent ?? 0.0) * (downloadTotal / (downloadTotal + pluginTotal))
+                percent = oldPercent + pluginPercent
             }
         }else {
             percent = 1.0
-            downloaded = true
+            isDone = true
         }
 
-        return (percent,progress?.curSize,progress?.totalSize,downloaded ?? false,progress?.isRunning ?? false,inAllStage,inDownlaod,inPlugin)
+        return (percent,progress?.curSize,progress?.totalSize,isDone,progress?.isRunning ?? false,inAllStage,inDownlaod,inPlugin)
     }
     
     

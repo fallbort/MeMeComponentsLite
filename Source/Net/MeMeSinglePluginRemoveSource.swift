@@ -20,7 +20,7 @@ public class MeMeSinglePluginRemoveSource : MeMeSinglePluginProtocol {
     
     //MARK: <>生命周期开始
     public init() {
-        
+        self.percentAccess = 0.1
     }
     //MARK: <>功能性方法
     public func checkPluginFinished(object: MeMeSingleDownloadProtocol) -> Bool {
@@ -38,19 +38,21 @@ public class MeMeSinglePluginRemoveSource : MeMeSinglePluginProtocol {
             complete?(false,nil)
             return
         }
-        self.progressChangedBlock?(0.1,false)
+        self.progressChangedBlock?(0.1,nil)
         let localFileURL = downloader.downloadFileUrl(object)
+        var success = true
         if FileManager.default.fileExists(atPath: localFileURL.path) {
             do {
                 try FileManager.default.removeItem(at: localFileURL)
             } catch {
+                success = false
                 gLog(key:"meme.error","\(error)")
             }
         }
-        self.progressChangedBlock?(1.0,true)
-        complete?(true,localFileURL)
+        self.progressChangedBlock?(1.0,success)
+        complete?(success,localFileURL)
     }
-    
+
     //MARK: <>内部View
     
     //MARK: <>内部UI变量

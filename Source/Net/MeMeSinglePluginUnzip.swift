@@ -49,7 +49,7 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
         self.progress = progress
         self.finishedDict.removeValue(forKey: object.key)
         self.lock.unlock()
-        self.progressChangedBlock?(progress,false)
+        self.progressChangedBlock?(progress,nil)
         let destTmp = self.getTempUrl(object: object)
         let sourcePath = downloader.pluginsPreUrl(object, plugin: self).path
         gLog("test afterDeal 1,key=\(object.key),sourcePath=\(sourcePath),destPath=\(destPath),destTmp=\(destTmp)")
@@ -61,21 +61,21 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
                 try FileManager.default.removeItem(at: destTmp)
             }
             try FileManager.default.createDirectory(at: destTmp, withIntermediateDirectories: true, attributes: nil)
-            FileUtils.unzip(sourcePath, toDestination: destTmp.path,delegate: self) { [weak self] progress, done in
+            FileUtils.unzip(sourcePath, toDestination: destTmp.path,delegate: self) { [weak self] progress, success in
                 guard let `self` = self else {return}
                 self.lock.lock()
                 var showProgress = self.progress
                 self.lock.unlock()
                 if var progress = progress {
-                    progress = progress > 0.99 ? 0.99 : progress
+                    progress = progress > 0.95 ? 0.95 : progress
                     self.lock.lock()
                     self.progress = progress
                     showProgress = progress
                     self.lock.unlock()
                 }
-                self.progressChangedBlock?(showProgress,done)
+                self.progressChangedBlock?(showProgress,nil)
                 
-                if done == true, progress != nil {
+                if success == true, progress != nil {
                     var success = true
                     do {
                         try FileManager.default.moveItem(at: destTmp, to: destPath)
@@ -105,16 +105,16 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
                         self.finishedDict.removeValue(forKey: object.key)
                         let progress = self.progress
                         self.lock.unlock()
-                        self.progressChangedBlock?(progress,true)
+                        self.progressChangedBlock?(progress,false)
                         complete?(false,nil)
                     }
-                }else if done == true {
+                }else if success == false {
                     gLog("test afterDeal 4,key=\(object.key)")
                     self.lock.lock()
                     self.finishedDict.removeValue(forKey: object.key)
                     let progress = self.progress
                     self.lock.unlock()
-                    self.progressChangedBlock?(progress,true)
+                    self.progressChangedBlock?(progress,false)
                     complete?(false,nil)
                 }
             }
@@ -124,7 +124,7 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
             self.finishedDict.removeValue(forKey: object.key)
             let progress = self.progress
             self.lock.unlock()
-            self.progressChangedBlock?(progress,true)
+            self.progressChangedBlock?(progress,false)
             complete?(false,nil)
         }
     }
