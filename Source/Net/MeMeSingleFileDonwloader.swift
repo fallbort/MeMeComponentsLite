@@ -111,6 +111,7 @@ public struct MeMeSingleDownloadObject:MeMeSingleDownloadProtocol {
 
 public class MeMeFileDownloadConfigure {
     public init() {}
+    public var showLog = false
     public func setQueue(label:String,qos:DispatchQoS) {
         outSetQueue = DispatchQueue(label: label, qos: qos)
     }
@@ -209,6 +210,7 @@ public class MeMeSingleFileDonwloader {
         self.resCacheDir = configure.resCacheDir
         self.downloadQueue = configure.queue
         self.resPluginsDir = configure.resPluginDir
+        self.showLog = configure.showLog
         startNetworkWatcher()
     }
     //MARK:<>功能性方法
@@ -435,7 +437,9 @@ public class MeMeSingleFileDonwloader {
     }
     
     private func startNextDownload() {
-        gLog("test start next")
+        if showLog {
+            gLog("test start next")
+        }
         otherLock.lock()
         let hasNetwork = reachablityManager == nil || reachablityManager!.isReachable == true
         otherLock.unlock()
@@ -541,7 +545,9 @@ public class MeMeSingleFileDonwloader {
         }
         
         let request = dowloadFile(object: object) { [weak self] success in
-            gLog("test dowloadFile out")
+            if self?.showLog == true {
+                gLog("test dowloadFile out")
+            }
             guard let strongSelf = self else { return}
             if let success = self?.fileDownloaded(object: object) {
                 var needRetry = false
@@ -590,7 +596,9 @@ public class MeMeSingleFileDonwloader {
                     }
                     
                 }
-                gLog("test dowloadFile out check needRetry")
+                if self?.showLog == true {
+                    gLog("test dowloadFile out check needRetry")
+                }
                 if needRetry == false {
                     strongSelf.lock.lock()
                     self?.downloadRetry.removeValue(forKey: object.key)
@@ -604,7 +612,9 @@ public class MeMeSingleFileDonwloader {
                             self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
                         }
                     }
-                    gLog("test dowloadFile out check success")
+                    if self?.showLog == true {
+                        gLog("test dowloadFile out check success")
+                    }
                     if success == true {
                         strongSelf.dealPlugins(object: object, complete: { [weak self] success in
                             guard let strongSelf = self else { return}
@@ -633,11 +643,15 @@ public class MeMeSingleFileDonwloader {
                         strongSelf.startNextDownload()
                     }
                 }else{
-                    gLog("test dowloadFile out before retry")
+                    if self?.showLog == true {
+                        gLog("test dowloadFile out before retry")
+                    }
                     self?.retryDownload(object: object)
                 }
             }else{
-                gLog("test dowloadFile out no self")
+                if self?.showLog == true {
+                    gLog("test dowloadFile out no self")
+                }
             }
         }
         
@@ -694,7 +708,9 @@ public class MeMeSingleFileDonwloader {
                     var success: Bool
                     switch response.result {
                     case .success:
-                        gLog("test download success")
+                        if self.showLog == true {
+                            gLog("test download success")
+                        }
                         //print("downloading Success = \(faceuId)")
                         if FileManager.default.fileExists(atPath: cacheURL.path) {
                             do {
@@ -772,7 +788,9 @@ public class MeMeSingleFileDonwloader {
                         self.didStageChangedInThreadBlock?(.failed)
                     }
                     self.downloadQueue.async {
-                        gLog("test download completion")
+                        if self.showLog == true {
+                            gLog("test download completion")
+                        }
                         completion?(success)
                     }
                 }
@@ -782,7 +800,9 @@ public class MeMeSingleFileDonwloader {
                     DispatchQueue.main.async {[weak self] in
                         self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: false, isRunning: false)
                     }
-                    gLog("test download completion")
+                    if self?.showLog == true {
+                        gLog("test download completion")
+                    }
                     completion?(false)
                 }
             }
@@ -792,7 +812,9 @@ public class MeMeSingleFileDonwloader {
                 DispatchQueue.main.async {[weak self] in
                     self?.updateProgress(object: object, curSize: nil, totalSize: nil, isDone: true, isRunning: false)
                 }
-                gLog("test download completion")
+                if self?.showLog == true {
+                    gLog("test download completion")
+                }
                completion?(true)
             }
         }
@@ -808,7 +830,9 @@ public class MeMeSingleFileDonwloader {
                 break
             }
         }
-        gLog("test dealPlugins foundPlugin=\(foundPlugin == nil)")
+        if self.showLog == true {
+            gLog("test dealPlugins foundPlugin=\(foundPlugin != nil)")
+        }
         if let foundPlugin = foundPlugin {
             self.lock.lock()
             self.downloadPlugins[object.key] = foundPlugin
@@ -967,6 +991,7 @@ public class MeMeSingleFileDonwloader {
     //MARK:<>内部数据变量
     fileprivate var resCacheDir:URL
     public var resPluginsDir:URL
+    public var showLog:Bool
     fileprivate var downloadQueue:DispatchQueue
     
     private let reachablityManager = NetworkReachabilityManager()
