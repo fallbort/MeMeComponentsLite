@@ -29,10 +29,12 @@ public class MeMeSessionDelegate : SessionDelegate {
                          completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         let host = challenge.protectionSpace.host
         var data = Self.authenticationDataMap[host]
+        var hasFile = false
         if data == nil {
             let file = MeMeBaseComponentConfig.shared.netURLAuthenticationFileBlock(host)
             if let file = file {
                 data = try? Data.init(contentsOf: file)
+                hasFile = true
             }
         }
         if let localCertificateData = data,
@@ -60,6 +62,25 @@ public class MeMeSessionDelegate : SessionDelegate {
                 // 证书校验不通过
                 completionHandler(URLSession.AuthChallengeDisposition.cancelAuthenticationChallenge, nil)
             }
+        }else if hasFile == false, let serverTrust = challenge.protectionSpace.serverTrust {
+            var disposition: URLSession.AuthChallengeDisposition = .performDefaultHandling
+            var credential: URLCredential?
+
+            if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust, let trust = challenge.protectionSpace.serverTrust {
+                disposition = URLSession.AuthChallengeDisposition.useCredential
+                credential = URLCredential(trust: trust)
+            } else {
+                if challenge.previousFailureCount > 0 {
+                    disposition = .cancelAuthenticationChallenge
+                } else {
+                    credential = session.configuration.urlCredentialStorage?.defaultCredential(for: challenge.protectionSpace)
+
+                    if credential != nil {
+                        disposition = .useCredential
+                    }
+                }
+            }
+            completionHandler(disposition,credential)
         }else{
             super.urlSession(session, task: task, didReceive: challenge, completionHandler: completionHandler)
         }
