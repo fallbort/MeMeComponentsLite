@@ -79,58 +79,122 @@ extension MeMeSinglePluginProtocol {
 }
 
 public protocol MeMeSingleDownloadProtocol {
-    var fileName:String {get}
-    var sourceUrl:String {get}
-    var key:String {get}
-    var alwaysRetry:Bool {get}
-    var md5Check:String? {get}
-    var sourceUrlConverCDN:String {get}
-    var plugins:[MeMeSinglePluginProtocol] {get}
+    var assositeObject:NSObject {get} //放入参数的对象
     func extraCheckLocalValid(url:URL) -> Bool
-    
-    var localUrl:URL? {get set}
-    var localResumeUrl:URL? {get set}
     
 }
 
-public struct MeMeSingleDownloadObject:MeMeSingleDownloadProtocol {
-    public init() {}
-    public var fileName:String = ""   //拼写后的文件名
-    public var sourceUrl:String = "" { //服务器url
-        didSet {
-            sourceUrlConverCDN = MeMeKitConfig.converCDNBlock(sourceUrl)
+private var MeMeSingleDownLocalUrl = "downlocalUrl"
+private var MeMeSingleDownLocalResumeUrl = "localResumeUrl"
+private var MeMeSingleDownKey = "key"
+private var MeMeSingleDownFileName = "fileName"
+private var MeMeSingleDownmd5Check = "md5Check"
+private var MeMeSingleDownalwaysRetry = "alwaysRetry"
+private var MeMeSingleDownplugins = "plugins"
+private var MeMeSingleDownCDNUrl = "sourceUrlConverCDN"
+private var MeMeSingleDownsourceUrl = "sourceUrl"
+extension MeMeSingleDownloadProtocol {
+    
+    public var fileName:String {//拼写后的文件名
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownFileName) as? String
+            return value ?? ""
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownFileName, newValue, .OBJC_ASSOCIATION_RETAIN)
         }
     }
-    
-    public var alwaysRetry:Bool = false
-    public var md5Check:String?
-
-    public var plugins:[MeMeSinglePluginProtocol] = []
+    public var key:String {//key
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownKey) as? String
+            return value ?? self.fileName
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownKey, newValue, .OBJC_ASSOCIATION_RETAIN)
+        }
+    }
+    public var sourceUrl:String {//source url
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownsourceUrl) as? String
+            return value ?? ""
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownsourceUrl, newValue, .OBJC_ASSOCIATION_RETAIN)
+            self.sourceUrlConverCDN = MeMeKitConfig.converCDNBlock(newValue)
+        }
+    }
+    public var sourceUrlConverCDN:String {//cdn url
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownCDNUrl) as? String
+            return value ?? ""
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownCDNUrl, newValue, .OBJC_ASSOCIATION_RETAIN)
+        }
+    }
+    public var alwaysRetry:Bool {//一直重试,会首先放入失败队列
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownalwaysRetry) as? Bool
+            return value ?? false
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownalwaysRetry, newValue, .OBJC_ASSOCIATION_ASSIGN)
+        }
+    }
+    public var md5Check:String? {//下载后的文件md5校验值
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownmd5Check) as? String
+            return value
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownmd5Check, newValue, .OBJC_ASSOCIATION_RETAIN)
+        }
+    }
+    public var plugins:[MeMeSinglePluginProtocol] {//插件数组
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownplugins) as? [MeMeSinglePluginProtocol]
+            return value ?? []
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownplugins, newValue, .OBJC_ASSOCIATION_RETAIN)
+        }
+    }
+    fileprivate var localUrl:URL? {//下载器设定,本地url
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownLocalUrl) as? URL
+            return value
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownLocalUrl, newValue, .OBJC_ASSOCIATION_RETAIN)
+        }
+    }
+    fileprivate var localResumeUrl:URL? {//下载器设定,断点续传Url
+        get {
+            let value = objc_getAssociatedObject(self.assositeObject, &MeMeSingleDownLocalResumeUrl) as? URL
+            return value
+        }
+        set {
+            objc_setAssociatedObject(self.assositeObject, &MeMeSingleDownLocalResumeUrl, newValue, .OBJC_ASSOCIATION_RETAIN)
+        }
+    }
     
     public func extraCheckLocalValid(url:URL) -> Bool {
         return true
     }
     
-    fileprivate var _key:String?
-    public var key:String {
-        get {
-            return _key ?? fileName
-        }
-        set {
-            _key = newValue
-        }
-    }
-    public var sourceUrlConverCDN:String = ""
     
-    public var localUrl:URL?   //下载器设定
-    public var localResumeUrl:URL?  //断点续传Url
+}
+
+public struct MeMeSingleDownloadObject:MeMeSingleDownloadProtocol {
+    public var assositeObject:NSObject = NSObject()
+    public init() {}
 }
 
 public class MeMeFileDownloadConfigure {
     public init() {}
     public var showLog = false
     public func setQueue(label:String,qos:DispatchQoS) {
-        outSetQueue = DispatchQueue(label: label, qos: qos)
+        outSetQueue = DispatchQueue(label: label, qos: qos,attributes: .concurrent)
     }
     
     public func setQueue(_ queue:DispatchQueue) {
@@ -158,7 +222,7 @@ public class MeMeFileDownloadConfigure {
         if let queue = _queue {
             return queue
         }else{
-            let newQueue = outSetQueue ?? DispatchQueue(label: "meme.singlefile.download", qos: .background)
+            let newQueue = outSetQueue ?? DispatchQueue(label: "meme.singlefile.download", qos: .background,attributes: .concurrent)
             _queue = newQueue
             return newQueue
         }
