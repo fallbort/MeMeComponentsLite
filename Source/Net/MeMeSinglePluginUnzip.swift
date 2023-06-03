@@ -13,23 +13,22 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
         
     }
     
-    public func cancel(object: MeMeSingleDownloadProtocol) {
+    public func cancel(downer:MeMeSingleFileDonwloader,object: MeMeSingleDownloadProtocol) {
         self.lock.lock()
         self.needCancel = true
         self.lock.unlock()
         
-        self.clear(object: object)
+        self.clear(downer: downer, object: object)
     }
     
-    public func checkPluginFinished(object: MeMeSingleDownloadProtocol) -> Bool {
-        guard let downloader = self.downloader else {return false}
+    public func checkPluginFinished(downer:MeMeSingleFileDonwloader,object: MeMeSingleDownloadProtocol) -> Bool {
         self.lock.lock()
         let finished = self.finishedDict[object.key]
         self.lock.unlock()
         if let finished = finished {
             return finished
         }else{
-            if let localFileURL = self.getFileUrl(object: object) {
+            if let localFileURL = self.getFileUrl(downer: downer, object: object) {
                 let finished = FileManager.default.fileExists(atPath: localFileURL.path)
                 return finished
             }
@@ -38,8 +37,8 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
         return false
     }
     
-    public func afterDeal(object: MeMeSingleDownloadProtocol, complete: ((Bool, URL?) -> ())?) {
-        guard let downloader = self.downloader,let destPath = self.getFileUrl(object: object) else {
+    public func afterDeal(downer:MeMeSingleFileDonwloader,object: MeMeSingleDownloadProtocol, complete: ((Bool, URL?) -> ())?) {
+        guard let destPath = self.getFileUrl(downer: downer, object: object) else {
             complete?(false,nil)
             return
         }
@@ -51,7 +50,7 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
         self.lock.unlock()
         self.progressChangedBlock?(progress,nil)
         let destTmp = self.getTempUrl(object: object)
-        let sourcePath = downloader.pluginsPreUrl(object, plugin: self).path
+        let sourcePath = downer.pluginsPreUrl(object, plugin: self).path
         gLog("test afterDeal 1,key=\(object.key),sourcePath=\(sourcePath),destPath=\(destPath),destTmp=\(destTmp)")
         do {
             if FileManager.default.fileExists(atPath: destPath.path) == true {
@@ -129,33 +128,30 @@ public class MeMeSinglePluginUnzip : NSObject, MeMeSinglePluginProtocol {
         }
     }
     
-    public func getPercent(object:MeMeSingleDownloadProtocol) -> Double {
+    public func getPercent(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol) -> Double {
         self.lock.lock()
         let progress = self.progress
         self.lock.unlock()
         return progress
     }
     
-    public func getPluginFile(object:MeMeSingleDownloadProtocol,preUrl:URL) -> URL {
-        return self.getFileUrl(object: object) ?? preUrl
+    public func getPluginFile(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol,preUrl:URL) -> URL {
+        return self.getFileUrl(downer:downer,object: object) ?? preUrl
     }
     
-    fileprivate func getFileUrl(object:MeMeSingleDownloadProtocol) -> URL? {
-        guard let downloader = self.downloader else {
-            return nil
-        }
-        return downloader.resPluginsDir.appendingPathComponent(object.key + "_unzip")
+    fileprivate func getFileUrl(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol) -> URL? {
+        return downer.resPluginsDir.appendingPathComponent(object.key + "_unzip")
     }
     
     fileprivate func getTempUrl(object:MeMeSingleDownloadProtocol) -> URL {
         return FileUtils.temporaryDirectory.appendingPathComponent(object.key + "_unzip")
     }
     
-    fileprivate func clear(object: MeMeSingleDownloadProtocol) {
+    fileprivate func clear(downer:MeMeSingleFileDonwloader,object: MeMeSingleDownloadProtocol) {
         self.lock.lock()
         self.finishedDict.removeValue(forKey: object.key)
         self.lock.unlock()
-        guard let downloader = self.downloader,let destPath = self.getFileUrl(object: object) else {
+        guard let destPath = self.getFileUrl(downer:downer,object: object) else {
             return
         }
         let destTmp = self.getTempUrl(object: object)

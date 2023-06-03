@@ -23,23 +23,19 @@ public class MeMeSinglePluginRemoveSource : MeMeSinglePluginProtocol {
         self.percentAccess = 0.1
     }
     //MARK: <>功能性方法
-    public func checkPluginFinished(object: MeMeSingleDownloadProtocol) -> Bool {
-        let existed:Bool = self.downloader?.fileDownloaded(object: object) ?? false
+    public func checkPluginFinished(downer:MeMeSingleFileDonwloader,object: MeMeSingleDownloadProtocol) -> Bool {
+        let existed:Bool = downer.fileDownloaded(object: object)
         if object.plugins.count > 1 {
-            let preFinished = self.downloader?.pluginsPreFinished(object, plugin: self) ?? false
+            let preFinished = downer.pluginsPreFinished(object, plugin: self)
             return preFinished == true && existed == false
         }else{
             return !existed
         }
     }
     
-    public func afterDeal(object:MeMeSingleDownloadProtocol,complete:((_ success:Bool,_ clearedUrl:URL?)->())?) {
-        guard let downloader = downloader else {
-            complete?(false,nil)
-            return
-        }
+    public func afterDeal(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol,complete:((_ success:Bool,_ clearedUrl:URL?)->())?) {
         self.progressChangedBlock?(0.1,nil)
-        let localFileURL = downloader.downloadFileUrl(object)
+        let localFileURL = downer.downloadFileUrl(object)
         var success = true
         if FileManager.default.fileExists(atPath: localFileURL.path) {
             do {

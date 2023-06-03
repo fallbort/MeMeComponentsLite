@@ -20,17 +20,17 @@ public enum SingleDownloadStage : String {
 }
 
 public protocol MeMeSinglePluginProtocol : AnyObject {
-    func getPluginFile(object:MeMeSingleDownloadProtocol,preUrl:URL) -> URL
-    func checkPluginFinished(object:MeMeSingleDownloadProtocol) -> Bool  //是否处理完成
-    func afterDeal(object:MeMeSingleDownloadProtocol,complete:((_ success:Bool,_ clearedUrl:URL?)->())?)  //进行处理
-    func cancel(object:MeMeSingleDownloadProtocol)  //取消处理
-    func getPercent(object:MeMeSingleDownloadProtocol) -> Double //处理进度
+    func getPluginFile(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol,preUrl:URL) -> URL
+    func checkPluginFinished(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol) -> Bool  //是否处理完成
+    func afterDeal(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol,complete:((_ success:Bool,_ clearedUrl:URL?)->())?)  //进行处理
+    func cancel(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol)  //取消处理
+    func getPercent(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol) -> Double //处理进度
 }
 
 extension MeMeSinglePluginProtocol {
-    public func getPluginFile(object:MeMeSingleDownloadProtocol,preUrl:URL) -> URL {return preUrl}
-    public func getPercent(object:MeMeSingleDownloadProtocol) -> Double {return self.checkPluginFinished(object: object) == true ? 1.0 : 0.0}
-    public func cancel(object:MeMeSingleDownloadProtocol) {}
+    public func getPluginFile(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol,preUrl:URL) -> URL {return preUrl}
+    public func getPercent(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol) -> Double {return self.checkPluginFinished(downer:downer,object: object) == true ? 1.0 : 0.0}
+    public func cancel(downer:MeMeSingleFileDonwloader,object:MeMeSingleDownloadProtocol) {}
 }
 
 private var MeMeSinglePluginDownloader = "PluginDownloader"
@@ -38,24 +38,24 @@ private var MeMeSinglePluginProgress = "PluginProgress"
 private var MeMeSinglePluginProgressAccess = "PluginProgressAccess"
 
 extension MeMeSinglePluginProtocol {
-    weak var downloader: MeMeSingleFileDonwloader? {
-        get {
-            let weakArray = objc_getAssociatedObject(self, &MeMeSinglePluginDownloader) as? WeakReferenceArray<MeMeSingleFileDonwloader>
-            if let object = weakArray?.allObjects().first as? MeMeSingleFileDonwloader {
-                return object
-            } else {
-                return nil
-            }
-        }
-        
-        set {
-            let weakArray = WeakReferenceArray<MeMeSingleFileDonwloader>()
-            if let object = newValue {
-                weakArray.addObject(object)
-            }
-            objc_setAssociatedObject(self, &MeMeSinglePluginDownloader, weakArray, .OBJC_ASSOCIATION_RETAIN)
-        }
-    }
+//    weak var downloader: MeMeSingleFileDonwloader? {
+//        get {
+//            let weakArray = objc_getAssociatedObject(self, &MeMeSinglePluginDownloader) as? WeakReferenceArray<MeMeSingleFileDonwloader>
+//            if let object = weakArray?.allObjects().first as? MeMeSingleFileDonwloader {
+//                return object
+//            } else {
+//                return nil
+//            }
+//        }
+//
+//        set {
+//            let weakArray = WeakReferenceArray<MeMeSingleFileDonwloader>()
+//            if let object = newValue {
+//                weakArray.addObject(object)
+//            }
+//            objc_setAssociatedObject(self, &MeMeSinglePluginDownloader, weakArray, .OBJC_ASSOCIATION_RETAIN)
+//        }
+//    }
     
     var progressChangedBlock: ((_ percent:CGFloat,_ success:Bool?)->())? {
         get {
@@ -305,7 +305,7 @@ public class MeMeSingleFileDonwloader {
     public func allFinished(object: MeMeSingleDownloadProtocol) -> Bool {
         var hasUnfinished = false
         for plugin in object.plugins {
-            let finished = plugin.checkPluginFinished(object: object)
+            let finished = plugin.checkPluginFinished(downer: self, object: object)
             if finished == false {
                 hasUnfinished = true
                 break
@@ -325,7 +325,7 @@ public class MeMeSingleFileDonwloader {
         if let plugin = plugin {
             for onePlugin in object.plugins {
                 if NSObject.getAddress(plugin) != NSObject.getAddress(onePlugin) {
-                    let finished = onePlugin.checkPluginFinished(object: object)
+                    let finished = onePlugin.checkPluginFinished(downer: self, object: object)
                     if finished == false {
                         hasUnfinished = true
                         break
@@ -407,7 +407,7 @@ public class MeMeSingleFileDonwloader {
         var newPlugins = plugins
         if plugins.count > 0 {
             let onePlugin = newPlugins.removeFirst()
-            let newPreUrl = onePlugin.getPluginFile(object: object, preUrl: preUrl)
+            let newPreUrl = onePlugin.getPluginFile(downer: self, object: object, preUrl: preUrl)
             return self.pluginsFileUrlInternel(object, plugins: newPlugins, preUrl: newPreUrl)
         }else{
             return preUrl
@@ -438,7 +438,6 @@ public class MeMeSingleFileDonwloader {
             newObject.localResumeUrl = downloadResumeFileUrl(object)
             var key = newObject.key
             newObject.plugins.forEach { [weak self] plugin in
-                plugin.downloader = self
                 plugin.progressChangedBlock = { [weak self,weak plugin] percent,success in
                     DispatchQueue.main.async { [weak self,weak plugin] in
                         guard let `self` = self else {return}
@@ -497,7 +496,7 @@ public class MeMeSingleFileDonwloader {
             request?.cancel()
         }
         let plugin = downloadPlugins.removeValue(forKey: object.key)
-        plugin?.cancel(object: object)
+        plugin?.cancel(downer: self, object: object)
         plugin?.progressChangedBlock = nil
         lock.unlock()
         
@@ -916,7 +915,7 @@ public class MeMeSingleFileDonwloader {
     fileprivate func dealPlugins(object: MeMeSingleDownloadProtocol,complete:((_ success:Bool)->())?) {
         var foundPlugin:MeMeSinglePluginProtocol?
         for onePlugin in object.plugins {
-            if onePlugin.checkPluginFinished(object: object) == false {
+            if onePlugin.checkPluginFinished(downer: self, object: object) == false {
                 foundPlugin = onePlugin
                 break
             }
@@ -928,7 +927,7 @@ public class MeMeSingleFileDonwloader {
             self.lock.lock()
             self.downloadPlugins[object.key] = foundPlugin
             self.lock.unlock()
-            foundPlugin.afterDeal(object: object) { [weak self] (ret,clearedUrl) in
+            foundPlugin.afterDeal(downer: self, object: object) { [weak self] (ret,clearedUrl) in
                 guard let `self` = self else { return}
                 if let clearedUrl = clearedUrl {
                     self.otherLock.lock()
@@ -1075,7 +1074,7 @@ public class MeMeSingleFileDonwloader {
                 
                 for plugin in plugins {
                     let oneTotal:Double = (plugin.percentAccess / (downloadTotal + pluginTotal))
-                    pluginPercent += plugin.getPercent(object: object) * oneTotal
+                    pluginPercent += plugin.getPercent(downer: self, object: object) * oneTotal
                 }
                 
                 let oldPercent:Double = (percent ?? 0.0) * (downloadTotal / (downloadTotal + pluginTotal))
