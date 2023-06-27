@@ -290,7 +290,7 @@ extension MemeTargetType {
 }
 
 extension Moya.MoyaError {
-    public func toMemeError() -> MemeError {
+    public func toMemeError() -> MemeCommonError {
         if case .underlying(let error, let response) = self, let afError = error as? AFError, afError.isExplicitlyCancelledError == true {
             return .cancel
         }

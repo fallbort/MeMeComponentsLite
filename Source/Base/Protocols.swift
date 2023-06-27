@@ -26,35 +26,6 @@ extension HttpUtilProtocol {
     }
 }
 
-public protocol FpnnUtilProtocol {
-    func getMemeHeaders() -> [String: Any]
-    
-    func extraDealResult(result:Result<[String: Any]?, MemeError>)
-}
-
-extension FpnnUtilProtocol {
-    public func getMemeHeaders() -> [String: Any] {
-        return [:]
-    }
-    public func extraDealResult(result:Result<[String: Any]?, MemeError>) {
-        
-    }
-}
-
-public protocol RtmManagerAnswerBaseDelegate {
-    
-}
-
-public protocol RtmUtilProtocol {
-    func getAnswerDelegate() -> RtmManagerAnswerBaseDelegate?
-}
-
-extension RtmUtilProtocol {
-    public func getAnswerDelegate() -> RtmManagerAnswerBaseDelegate? {
-        return nil
-    }
-}
-
 public protocol PlayerUtilProtocol {
     func getMyCountryRegionCode() -> String
 }

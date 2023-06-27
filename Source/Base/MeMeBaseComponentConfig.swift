@@ -15,14 +15,6 @@ public class BaseHttpUtil : HttpUtilProtocol {
     public var maxUploadSize:Int { return 1024 * 1024 * 4}
 }
 
-public class BaseFpnnUtil : FpnnUtilProtocol {
-    
-}
-
-public class BaseRtmUtil : RtmUtilProtocol {
-    
-}
-
 public class BasePlayerUtil : PlayerUtilProtocol {
     
 }
@@ -31,8 +23,6 @@ public class BasePlayerUtil : PlayerUtilProtocol {
     @objc public static let shared:MeMeBaseComponentConfig = MeMeBaseComponentConfig()
     //MARK:<>外部变量
     public var httpUtilObject:HttpUtilProtocol = BaseHttpUtil()
-    public var fpnnUtilObject:FpnnUtilProtocol = BaseFpnnUtil()
-    public var rtmUtilObject:RtmUtilProtocol = BaseRtmUtil()
     public var playerUtilObject:PlayerUtilProtocol = BasePlayerUtil()
     
     //MARK:<>外部block
