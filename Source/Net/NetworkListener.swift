@@ -131,7 +131,11 @@ import MeMeKit
         }
     }
     
-    fileprivate lazy var statusChangedBObser = BehaviorSubject<(oldStatus:NetConnectStatus?,curStatus:NetConnectStatus)>(value: (nil,.unknown))
+    @objc public static func isNetworkReachability(status:NetConnectStatus) -> Bool {
+        return status == .ethernetOrWiFi || status == .cellular ? true : false
+    }
+    
+    public lazy var statusChangedBObser = BehaviorSubject<(oldStatus:NetConnectStatus?,curStatus:NetConnectStatus)>(value: (nil,.unknown))
     public lazy var statusChangedPObser = PublishSubject<(oldStatus:NetConnectStatus?,curStatus:NetConnectStatus)>()
     
     fileprivate var networkReachabilityManager: NetworkReachabilityManager?

@@ -51,6 +51,7 @@ Pod::Spec.new do |spec|
       base.dependency 'Result'
       base.dependency 'RxSwift'
       base.dependency 'Moya'
+      base.dependency 'SwiftyJSON'
       base.framework   = "Foundation"
   end
 end
