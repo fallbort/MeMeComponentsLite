@@ -24,7 +24,7 @@ public enum MemeCommonErrorCode: Int {
     case system = -18888894
 }
 
-public enum MemeCommonError: CustomNSError {
+public enum MemeCommonError: CustomNSError ,Equatable {
     case cancel
 	case nonetwork
     case network
