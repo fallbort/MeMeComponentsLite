@@ -10,6 +10,7 @@ import MeMeComponents
 import Moya
 import SwiftyJSON
 import MeMeKit
+import Result
 
 public struct MeMeCommonNetwork {
     @discardableResult
@@ -17,13 +18,13 @@ public struct MeMeCommonNetwork {
         _ target: T,
         callbackQueue: DispatchQueue? = DispatchQueue(label:"moyarequest.net.z1j"),
         thisProvider: MoyaProvider<T>? = nil,
-        success successCallback: @escaping (Any) -> Void,
-        error errorCallback: @escaping (_ errorCode: Int, _ message: String) -> Void,
-        failure failureCallback: @escaping (MemeCommonError) -> Void
+        complete completeCallback: @escaping (Result<Any, MemeCommonError>) -> Void
         ) -> Cancellable? {
         
         guard NetworkListener.shared.isNetworkReachability else {
-            failureCallback(.nonetwork)
+            DispatchQueue.main.async {
+                completeCallback(.failure(.nonetwork))
+            }
             return nil
         }
 
@@ -31,7 +32,7 @@ public struct MeMeCommonNetwork {
         
         guard target.canRequest() == true else {
             DispatchQueue.main.async {
-                failureCallback(.network)
+                completeCallback(.failure(.network))
             }
             return nil
         }
@@ -84,24 +85,24 @@ public struct MeMeCommonNetwork {
                 DispatchQueue.main.async {
                     if let isResponseSuccess = isResponseSuccess {
                         if isResponseSuccess == true,let successData = successData {
-                            successCallback(successData)
+                            completeCallback(.success(successData))
                         }else{
-                            let code:Int = failedCode ?? 999999
+                            let code:Int = failedCode ?? 999999754
                             let msg:String = failedMsg ?? ""
-                            errorCallback(code, msg)
+                            completeCallback(.failure(.normal(code: code, msg: msg, isCustom: true)))
                         }
                     }else{
                         if let errorString = errorString {
                             gLog(key: "meme.error", errorString)
                         }
-                        failureCallback(.network)
+                        completeCallback(.failure(.network))
                     }
                 }
                 
             case let .failure(error):
                 DispatchQueue.main.async {
                     gLog(key: "meme.error", "\(target.method)->\(target.baseURL)\(target.path): \(error)")
-                    failureCallback(error.toMemeError())
+                    completeCallback(.failure(error.toMemeError()))
                 }
             }
         }

@@ -21,16 +21,15 @@ public enum MemeCommonErrorCode: Int {
     case cancel = -18888897
 	case nonetwork = -18888896
     case network = -18888895
-    case system = -18888894
+    case other = -18888894
 }
 
 public enum MemeCommonError: CustomNSError ,Equatable {
     case cancel
 	case nonetwork
     case network
-    case system(NSError?)
-    case normal(NSError)
-    case custom(code: Int, msg: String)
+    case other(NSError?)  //一般不使用
+    case normal(code: Int, msg: String,isCustom:Bool)
     
     public static var errorDomain: String { return MemeErrorDomain }
 
@@ -43,15 +42,13 @@ public enum MemeCommonError: CustomNSError ,Equatable {
 			return MemeCommonErrorCode.nonetwork.rawValue
         case .network:
             return MemeCommonErrorCode.network.rawValue
-		case .system(let error):
+		case .other(let error):
 			if let error = error {
 				return error.code
 			} else {
-				return MemeCommonErrorCode.system.rawValue
+				return MemeCommonErrorCode.other.rawValue
 			}
-        case .normal(let error):
-            return error.code
-        case .custom(let code,  _):
+        case .normal(let code,  _, _):
             return code
 		}
 	}
@@ -67,22 +64,20 @@ public enum MemeCommonError: CustomNSError ,Equatable {
             userInfo[NSLocalizedDescriptionKey] = NELocalize.localizedString("no network", comment: "")
         case .network:
             userInfo[NSLocalizedDescriptionKey] = NELocalize.localizedString("network error", comment: "")
-        case .system(let error):
+        case .other(let error):
             if let error = error {
                 userInfo[NSLocalizedDescriptionKey] = error.localizedDescription
             } else {
-                userInfo[NSLocalizedDescriptionKey] = NELocalize.localizedString("system error", comment: "")
+                userInfo[NSLocalizedDescriptionKey] = NELocalize.localizedString("other error", comment: "")
             }
-        case .normal(let error):
-            userInfo[NSLocalizedDescriptionKey] = error.localizedDescription
-        case .custom(_,  let msg):
+        case .normal(_,  let msg,_):
             userInfo[NSLocalizedDescriptionKey] = msg
 		}
 		return userInfo
 	}
 
     public func nsError() -> NSError {
-		if case .system(let error) = self {
+		if case .other(let error) = self {
 			if let error = error {
 				return error
 			}
