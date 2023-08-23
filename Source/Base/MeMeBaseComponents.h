@@ -8,5 +8,7 @@
 #ifndef MeMeBaseComponents_h
 #define MeMeBaseComponents_h
 
+#define MeMeComponentsBundle "MeMeComponents"
+
 
 #endif /* MeMeBaseComponents_h */

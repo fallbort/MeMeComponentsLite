@@ -528,7 +528,7 @@ public class MeMeSingleFileDonwloader {
         let hasNetwork = reachablityManager == nil || reachablityManager!.isReachable == true
         otherLock.unlock()
         if hasNetwork == false {
-            MeMeKitConfig.showHUDBlock(MeMeKitConfig.localizeStringBlock("check_network",.normal))
+            NELocalize.localizedString("check_network",bundlePath: MeMeComponentsBundle,comment: "")
             return //无网络不继续
         }
         

@@ -39,6 +39,7 @@ Pod::Spec.new do |spec|
       base.source_files = 'Source/Base/**/*.{h,m,swift}'
       base.dependency 'MeMeKit'
       base.framework    = "Foundation"
+      base.resources = ['Resources/*.bundle']
   end
 
   spec.subspec 'Net' do |base|
